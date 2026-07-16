@@ -1,0 +1,25 @@
+{
+  "background_color": "#ffffff",
+  "description": "Eatt Out grilled over open flame. Order online, straight to WhatsApp.",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "Eatt Out Restaurant",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "Eatt Out",
+  "start_url": "/",
+  "theme_color": "#f07a48",
+  "id": "Eatt Out",
+  "icons": [
+    {
+      "src": "launchericon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "launchericon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
