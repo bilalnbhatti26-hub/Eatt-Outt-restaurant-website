@@ -932,7 +932,13 @@ placeOrderBtn.addEventListener("click", async () => {
         const orderId = data[0].id;
         document.getElementById("checkout-fields").style.display = "none";
         document.getElementById("order-success").style.display = "block";
-        document.getElementById("new-id").textContent = "#" + orderId;
+       document.getElementById("new-id").textContent =
+    "#" + String(orderId).slice(-4);
+    document.getElementById("placed-time").textContent =
+new Date().toLocaleTimeString("en-PK", {
+    hour: "numeric",
+    minute: "2-digit"
+});
         placeOrderBtn.style.display = "none";
         document.getElementById("clear-cart").style.display = "none";
  
