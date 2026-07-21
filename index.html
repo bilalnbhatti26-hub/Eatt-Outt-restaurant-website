@@ -573,280 +573,366 @@ footer{padding:64px 0 30px; border-top:1px solid var(--border);}
  
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 <script>
-/* =========================================================
-   ORDER DESK — Core Logic
-   Matches Supabase Schema: id, customer, phone, address, notes, items, total, status, created_at
-   ========================================================= */
-
-const STATUS = {
-  PENDING: 'pending',
-  PREPARING: 'preparing',
-  DELIVERED: 'delivered',
-  CANCELLED: 'cancelled',
-};
-
-const STATUS_LABEL = {
-  [STATUS.PENDING]: 'Pending',
-  [STATUS.PREPARING]: 'Preparing',
-  [STATUS.DELIVERED]: 'Delivered',
-  [STATUS.CANCELLED]: 'Cancelled',
-};
-
-let ORDERS = [];
-const supabaseUrl = "https://cctctqhsaywlgcbycecp.supabase.co";
-const supabaseKey = "sb_publishable_57Jt5_fxPpAS3rnBQbYQ2A_RhdLxWwQ";
-const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
-
-/* ---------------- HELPERS ---------------- */
-function formatTime(ts) {
-  if (!ts) return "---";
-  return new Date(ts).toLocaleTimeString('en-PK', {
-    hour: 'numeric',
-    minute: '2-digit',
-    day: 'short',
-    month: 'short'
+/* ============================================================
+   DATABASE (Supabase) SETUP  must exist before anything uses it
+============================================================ */
+const dbUrl = "https://cctctqhsaywlgcbycecp.supabase.co";
+const dbKey = "sb_publishable_57Jt5_fxPpAS3rnBQbYQ2A_RhdLxWwQ";
+const dbClient = supabase.createClient(dbUrl, dbKey);
+ 
+/* ============================================================
+   UI REFERENCES
+============================================================ */
+const drawerItems  = document.getElementById("cart-items");
+const placeOrderBtn = document.getElementById("place-order");
+const placeOrderOriginalHTML = placeOrderBtn.innerHTML;
+ 
+/* ============================================================
+   MENU DATA  edit this array to customise the whole menu
+   ============================================================ */
+const menu = [
+  {id:1, name:"Seekh Kebab Platter", cat:"bbq", price:850, rating:4.9, desc:"Charcoal-grilled beef seekh, mint chutney, salad.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSVLG-rgeztKSuVooC5u9WEx6kde6sgmo5ddiKQFIXlzg&s=10"},
+  {id:2, name:"Chicken Malai Boti", cat:"bbq", price:790, rating:4.8, desc:"Cream-marinated chicken, smoked over coal.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSogKc1iuscBddLoFTPwFBnH9-JyjQHP83YTNpPM4S5rw&s=10"},
+  {id:3, name:"Mutton Chops", cat:"bbq", price:1250, rating:4.9, desc:"Slow-grilled chops, house spice rub.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSsm6Y9FzF1NJX41Tf99htTztryKTJE3NIEjuRAjfOtsA&s"},
+  {id:4, name:"Reshmi Kebab", cat:"bbq", price:820, rating:4.7, desc:"Silky chicken kebabs, char-grilled to order.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTjXF0OGQNW2RxTPkmlTwblL5d8V1dKOs_uXHq2kMji_Q&s=10"},
+  {id:5, name:"Tandoori Fish", cat:"bbq", price:980, rating:4.6, desc:"River fish marinated in tandoori masala.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRMZfJYbdWYsQynM7Z2YT8bjJUP95ZU5DzyRwSkX-k7MQ&s=10"},
+  {id:6, name:"Zinger Burger", cat:"burgers", price:650, rating:4.7, desc:"Crispy fried chicken, spiced mayo, brioche bun.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR_hs62D7z5Me0Yr_Kz2nUS0vBgCdRIQ6zPvgp3AQwsqQ&s=10"},
+  {id:7, name:"Smoky BBQ Beef Burger", cat:"burgers", price:720, rating:4.8, desc:"Grilled beef patty, smoked cheddar, BBQ glaze.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSK7l4v1RIgG2TdvPI7AUQI3ZKXbyDCRZhFfycCtukpPg&s=10"},
+  {id:8, name:"Double Cheese Burger", cat:"burgers", price:780, rating:4.6, desc:"Two beef patties, double cheese, pickles.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSEWNKBURIV8awOYnxWw6hp36IWrkDXPyzyCKY-6CGuDw&s=10"},
+  {id:9, name:"Peri Peri Chicken Burger", cat:"burgers", price:690, rating:4.5, desc:"Flame-grilled chicken, peri peri sauce.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRM8YXbUkFtDr9AWWn1grvs0H9v4hYmbMCDhEdzoDVIVw&s=10"},
+  {id:10, name:"Fire Pepperoni Pizza", cat:"pizza", price:1450, rating:4.8, desc:"Stone-baked, double pepperoni, chilli oil.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQvZErf9GX9UTk1sUfDuaZeW8LUETHEpo1eRTDzrX7qPA&s=10"},
+  {id:11, name:"BBQ Chicken Pizza", cat:"pizza", price:1390, rating:4.7, desc:"Smoked chicken, BBQ base, red onion.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcREGg-ZudmDEx5kygilIJ0ZkWlLQIlHVOqT2il2ufxbPA&s=10"},
+  {id:12, name:"Loaded Malai Boti Pizza", cat:"pizza", price:1550, rating:4.9, desc:"Malai boti, jalapeños, mozzarella blend.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ9bR330P1oyGeMcnrI0G75TKzMHuYuy0i-OL69KfAZaQ&s=10"},
+  {id:13, name:"Angeethi Feast Deal", cat:"deals", price:2450, rating:4.9, desc:"Seekh kebab, malai boti, naan, drinks for 2.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQxu4maQu7mg2cLmJtREy1p-HNBV5RUHJwpnTVzmBTrDQ&s=10"},
+  {id:14, name:"Burger & Fries Combo", cat:"deals", price:990, rating:4.6, desc:"Any burger, regular fries, soft drink.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSulObtgjcQRizfXUJ-K2IqIFr8Y0YqNEzBuJjgx_SvsQ&s=10"},
+  {id:15, name:"Family Pizza Deal", cat:"deals", price:2890, rating:4.7, desc:"2 large pizzas, garlic bread, 1.5L drink.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTBD7JU80MkkgybgTRLQ0U1aZSSX4fCBas7WMxxJIwofg&s"},
+  {id:16, name:"Fresh Lime Soda", cat:"drinks", price:250, rating:4.5, desc:"Sparkling lime, mint, rock salt.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSoEyrNI0Z6S0o35izA4jLRWsjcfXahrR1g7aB1OmpePA&s=10"},
+  {id:17, name:"Mint Margarita Mocktail", cat:"drinks", price:390, rating:4.6, desc:"Fresh mint, lime, soda over ice.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT_gudPBTj9eIrU-EgNCts4eXWZvAqTSSOmlZYt_rntBA&s=10"},
+  {id:18, name:"Soft Drink Can", cat:"drinks", price:150, rating:4.3, desc:"Chilled 330ml can.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT3efFN_NIxlw6YC96nPMvaUR6wNhO8LtBkLnEqJNCQeg&s=10"},
+  {id:19, name:"Kunafa Slice", cat:"desserts", price:480, rating:4.9, desc:"Crisp shredded pastry, sweet cheese, syrup.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_jw8SyZi6Ey5wh2RduxUHh6XY07ZRKYm235LJCwLqkg&s=10"},
+  {id:20, name:"Molten Lava Cake", cat:"desserts", price:420, rating:4.8, desc:"Warm chocolate cake, oozing centre.", img:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTcM_AOS5FI-mKovwZFMwvQFWD1f15gKbD5UiYDIesQgA&s=10"}
+];
+ 
+/* ============================================================
+   STATE
+   ============================================================ */
+let cart = JSON.parse(localStorage.getItem("eattout_cart") || "{}");
+let activeCat = "all";
+let searchTerm = "";
+ 
+/* ============================================================
+   LOADER
+   ============================================================ */
+window.addEventListener("load", () => {
+  setTimeout(() => document.getElementById("loader").classList.add("hide"), 400);
+});
+ 
+/* ============================================================
+   EMBER PARTICLES
+   ============================================================ */
+function spawnEmbers(){
+  const wrap = document.getElementById("embers");
+  const count = window.innerWidth < 700 ? 12 : 22;
+  for(let i=0;i<count;i++){
+    const e = document.createElement("div");
+    e.className = "ember";
+    const size = 2 + Math.random()*4;
+    e.style.width = size+"px";
+    e.style.height = size+"px";
+    e.style.left = Math.random()*100+"vw";
+    e.style.setProperty("--drift", (Math.random()*80-40)+"px");
+    const duration = 6 + Math.random()*8;
+    e.style.animationDuration = duration+"s";
+    e.style.animationDelay = (Math.random()*duration)+"s";
+    wrap.appendChild(e);
+  }
+}
+spawnEmbers();
+ 
+/* ============================================================
+   THEME
+   ============================================================ */
+const root = document.documentElement;
+const themeToggle = document.getElementById("theme-toggle");
+const themeIcon = document.getElementById("theme-icon");
+function applyTheme(t){
+  root.setAttribute("data-theme", t);
+  localStorage.setItem("eattout_theme", t);
+  themeIcon.innerHTML = t === "dark"
+    ? '<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/>'
+    : '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>';
+}
+applyTheme(localStorage.getItem("eattout_theme") || "dark");
+themeToggle.addEventListener("click", () => {
+  applyTheme(root.getAttribute("data-theme") === "dark" ? "light" : "dark");
+});
+ 
+/* ============================================================
+   NAV
+   ============================================================ */
+const header = document.getElementById("site-header");
+const fabTop = document.getElementById("fab-top");
+window.addEventListener("scroll", () => {
+  const scrolled = window.scrollY > 40;
+  header.classList.toggle("scrolled", scrolled);
+  fabTop.classList.toggle("show", window.scrollY > 500);
+});
+fabTop.addEventListener("click", () => window.scrollTo({top:0, behavior:"smooth"}));
+ 
+const burger = document.getElementById("burger");
+const navLinks = document.getElementById("navLinks");
+burger.addEventListener("click", () => navLinks.classList.toggle("open"));
+navLinks.querySelectorAll("a").forEach(a => a.addEventListener("click", () => navLinks.classList.remove("open")));
+ 
+/* ============================================================
+   REVEAL ON SCROLL
+   ============================================================ */
+const io = new IntersectionObserver((entries) => {
+  entries.forEach(en => { if(en.isIntersecting) en.target.classList.add("in"); });
+}, {threshold:.15});
+document.querySelectorAll(".reveal").forEach(el => io.observe(el));
+ 
+/* ============================================================
+   TOASTS
+   ============================================================ */
+function toast(msg){
+  const wrap = document.getElementById("toast-wrap");
+  const t = document.createElement("div");
+  t.className = "toast";
+  t.textContent = msg;
+  wrap.appendChild(t);
+  setTimeout(() => {
+    t.classList.add("leaving");
+    setTimeout(() => t.remove(), 350);
+  }, 2200);
+}
+ 
+/* ============================================================
+   RIPPLE
+   ============================================================ */
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".btn");
+  if(!btn) return;
+  const rect = btn.getBoundingClientRect();
+  const r = document.createElement("span");
+  r.className = "ripple";
+  r.style.left = (e.clientX - rect.left)+"px";
+  r.style.top = (e.clientY - rect.top)+"px";
+  btn.appendChild(r);
+  setTimeout(() => r.remove(), 650);
+});
+ 
+/* ============================================================
+   MENU RENDER / FILTER / SEARCH
+   ============================================================ */
+const grid = document.getElementById("menu-grid");
+ 
+function renderMenu(){
+  const filtered = menu.filter(item => {
+    const matchCat = activeCat === "all" || item.cat === activeCat;
+    const matchSearch = item.name.toLowerCase().includes(searchTerm) || item.desc.toLowerCase().includes(searchTerm);
+    return matchCat && matchSearch;
   });
-}
-
-function formatMoney(n) {
-  return 'Rs ' + (n || 0).toLocaleString('en-PK');
-}
-
-function waitMinutesSeconds(order) {
-  const end = (order.status === STATUS.DELIVERED || order.status === STATUS.CANCELLED)
-    ? (order.finishedAt || Date.now())
-    : Date.now();
-  const ms = Math.max(0, end - order.createdAt);
-  const totalSec = Math.floor(ms / 1000);
-  return {
-    m: Math.floor(totalSec / 60),
-    s: totalSec % 60,
-    totalMin: totalSec / 60
-  };
-}
-
-/* ---------------- DATA LOADING ---------------- */
-async function loadOrders() {
-  const { data, error } = await supabaseClient
-    .from("orders")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("Supabase Load Error:", error);
+ 
+  if(filtered.length === 0){
+    grid.innerHTML = `<div class="no-results">No dishes match "${searchTerm}". Try another search.</div>`;
     return;
   }
-
-  // MAPPING SUPABASE DATA TO DASHBOARD UI
-  ORDERS = data.map(order => ({
-    id: order.id,
-    customer: order.customer,
-    phone: order.phone,
-    items: order.items || [], // Matches the JSON array from website
-    total: order.total,       // Matches the total column
-    address: order.address,   // Matches the string column
-    notes: order.notes,
-    status: order.status,
-    createdAt: new Date(order.created_at).getTime()
-  }));
-
-  render();
+ 
+  grid.innerHTML = filtered.map(item => `
+    <div class="card reveal in" data-id="${item.id}">
+      <div class="card-img">
+       <img src="${item.img}" alt="${item.name}" loading="lazy">
+        <span class="badge">${item.cat}</span>
+      </div>
+      <div class="card-body">
+        <div class="card-top">
+          <span class="card-name">${item.name}</span>
+          <span class="rating">★ ${item.rating}</span>
+        </div>
+        <p class="card-desc">${item.desc}</p>
+        <div class="card-bottom">
+          <span class="price">${item.price}</span>
+          <button class="add-btn" data-add="${item.id}" aria-label="Add ${item.name} to cart">+</button>
+        </div>
+      </div>
+    </div>
+  `).join("");
 }
-
-/* ---------------- ACTIONS ---------------- */
-async function setStatus(id, status) {
-  const order = ORDERS.find(o => o.id == id);
-  if (!order) return;
-
-  const { error } = await supabaseClient
-    .from("orders")
-    .update({ status: status })
-    .eq("id", id);
-
-  if (error) {
-    alert("Status update failed: " + error.message);
+ 
+document.getElementById("cats").addEventListener("click", (e) => {
+  const btn = e.target.closest(".cat-btn");
+  if(!btn) return;
+  document.querySelectorAll(".cat-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  activeCat = btn.dataset.cat;
+  renderMenu();
+});
+ 
+document.getElementById("search").addEventListener("input", (e) => {
+  searchTerm = e.target.value.trim().toLowerCase();
+  renderMenu();
+});
+ 
+grid.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-add]");
+  if(!btn) return;
+  addToCart(Number(btn.dataset.add));
+});
+ 
+/* ============================================================
+   CART
+   ============================================================ */
+function saveCart(){
+  localStorage.setItem("eattout_cart", JSON.stringify(cart));
+  renderCart();
+}
+function addToCart(id){
+  cart[id] = (cart[id] || 0) + 1;
+  saveCart();
+  const item = menu.find(m => m.id === id);
+  toast(`${item.name} added to cart`);
+}
+function changeQty(id, delta){
+  if(!cart[id]) return;
+  cart[id] += delta;
+  if(cart[id] <= 0) delete cart[id];
+  saveCart();
+}
+function clearCart(){
+  cart = {};
+  saveCart();
+  toast("Cart emptied");
+}
+function cartTotal(){
+  return Object.entries(cart).reduce((sum,[id,qty]) => {
+    const item = menu.find(m => m.id === Number(id));
+    return sum + (item ? item.price*qty : 0);
+  }, 0);
+}
+function cartCount(){
+  return Object.values(cart).reduce((a,b) => a+b, 0);
+}
+ 
+function renderCart(){
+  const container = document.getElementById("cart-items");
+  const entries = Object.entries(cart);
+  document.getElementById("cart-count").textContent = cartCount();
+  document.getElementById("cart-total").textContent = cartTotal().toLocaleString();
+ 
+  if(entries.length === 0){
+    container.innerHTML = `<div class="cart-empty">Your cart is empty.<br>Add something fresh off the grill.</div>`;
     return;
   }
-
-  order.status = status;
-  if (status === STATUS.DELIVERED || status === STATUS.CANCELLED) {
-    order.finishedAt = Date.now();
-  }
-
-  if (typeof closeSheet === 'function') closeSheet();
-  render();
-}
-
-/* ---------------- REALTIME ---------------- */
-function initRealtime() {
-  supabaseClient
-    .channel('db-changes')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
-      if (payload.eventType === 'INSERT') {
-        if (typeof playChime === 'function') playChime();
-      }
-      loadOrders(); // Refresh all data on any change
-    })
-    .subscribe();
-}
-
-/* ---------------- INITIALIZE ---------------- */
-loadOrders();
-initRealtime();
-
-
-/* =========================================================
-   DASHBOARD RENDERING (UI Logic)
-   ========================================================= */
-
-(function () {
-  'use strict';
-
-  const grid = document.getElementById('ordersGrid');
-  const emptyMsg = document.getElementById('ordersEmpty');
-  const searchInput = document.getElementById('searchInput');
-  const filtersEl = document.getElementById('filters');
-  
-  let state = {
-    filter: 'all',
-    query: '',
-  };
-
-  function escapeHtml(str) {
-    if (!str) return "";
-    return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  }
-
-  function renderStats() {
-    const pending = ORDERS.filter(o => o.status === STATUS.PENDING).length;
-    const preparing = ORDERS.filter(o => o.status === STATUS.PREPARING).length;
-    const delivered = ORDERS.filter(o => o.status === STATUS.DELIVERED).length;
-    const revenue = ORDERS
-      .filter(o => o.status === STATUS.DELIVERED)
-      .reduce((sum, o) => sum + (Number(o.total) || 0), 0);
-
-    document.getElementById('statPending').textContent = pending;
-    document.getElementById('statPreparing').textContent = preparing;
-    document.getElementById('statDelivered').textContent = delivered;
-    document.getElementById('statRevenue').textContent = formatMoney(revenue);
-  }
-
-  function ticketMarkup(order, opts = {}) {
-    const { m, s, totalMin } = waitMinutesSeconds(order);
-    const isActive = order.status === STATUS.PENDING || order.status === STATUS.PREPARING;
-    
-    // Build items list
-    const itemsHtml = order.items.map(it => `
-      <li><span class="qty">${it.qty}×</span> ${escapeHtml(it.name)}</li>
-    `).join('');
-
+ 
+  container.innerHTML = entries.map(([id,qty]) => {
+    const item = menu.find(m => m.id === Number(id));
+    if(!item) return "";
     return `
-      <article class="ticket" data-status="${order.status}" data-id="${order.id}" style="--tilt:${opts.tilt || 0}deg">
-        <div class="ticket__stripe"></div>
-        <div class="ticket__head">
-          <span class="ticket__id">#${String(order.id).padStart(3, '0')}</span>
-          ${isActive ? `
-            <div class="ticket__timer">
-              <span class="dot"></span>
-              <span class="ticket__timer-text">Waiting ${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}</span>
-            </div>` : `<span class="ticket__time">${formatTime(order.createdAt)}</span>`}
-          <span class="ticket__status">${STATUS_LABEL[order.status]}</span>
+      <div class="cart-item">
+        <div class="cart-item-name">${item.name}<small>Rs. ${item.price} each</small></div>
+        <div class="qty-ctrl">
+          <button data-dec="${id}">−</button>
+          <span>${qty}</span>
+          <button data-inc="${id}">+</button>
         </div>
-
-        <div class="ticket__section">
-          <p class="ticket__label">Customer</p>
-          <p class="ticket__customer">${escapeHtml(order.customer)}</p>
-          <p class="ticket__phone">${escapeHtml(order.phone)}</p>
-        </div>
-
-        <div class="ticket__section">
-          <p class="ticket__label">Items</p>
-          <ul class="ticket__items">${itemsHtml}</ul>
-        </div>
-
-        <div class="ticket__section">
-          <div class="ticket__totals">
-            <div class="ticket__totals-row is-total"><span>Total</span><span>${formatMoney(order.total)}</span></div>
-          </div>
-        </div>
-
-        <div class="ticket__section">
-          <p class="ticket__label">Address</p>
-          <p class="ticket__address">${escapeHtml(order.address)}</p>
-        </div>
-
-        ${order.notes ? `
-        <div class="ticket__section">
-          <p class="ticket__label">Notes</p>
-          <p class="ticket__note">${escapeHtml(order.notes)}</p>
-        </div>` : ''}
-
-        <div class="ticket__actions">
-           ${order.status === STATUS.PENDING ? `
-            <button class="tbtn tbtn--accept" data-action="accept" data-id="${order.id}">Accept</button>
-            <button class="tbtn tbtn--cancel" data-action="cancel" data-id="${order.id}">Cancel</button>
-          ` : ''}
-          ${order.status === STATUS.PREPARING ? `
-            <button class="tbtn tbtn--delivered" data-action="deliver" data-id="${order.id}">Mark Delivered</button>
-            <button class="tbtn tbtn--cancel" data-action="cancel" data-id="${order.id}">Cancel</button>
-          ` : ''}
-          ${order.status === STATUS.DELIVERED ? `<button class="tbtn" disabled>COMPLETED</button>` : ''}
-        </div>
-      </article>
+        <div class="cart-item-price">${(item.price*qty).toLocaleString()}</div>
+      </div>
     `;
-  }
-
-  window.render = function render() {
-    renderStats();
-    const list = ORDERS.filter(o => {
-        const matchesFilter = state.filter === 'all' ? true : o.status === state.filter;
-        const q = state.query.toLowerCase();
-        const matchesSearch = o.customer.toLowerCase().includes(q) || o.phone.includes(q) || String(o.id).includes(q);
-        return matchesFilter && matchesSearch;
+  }).join("");
+}
+renderCart();
+ 
+document.getElementById("cart-items").addEventListener("click", (e) => {
+  const inc = e.target.closest("[data-inc]");
+  const dec = e.target.closest("[data-dec]");
+  if(inc) changeQty(Number(inc.dataset.inc), 1);
+  if(dec) changeQty(Number(dec.dataset.dec), -1);
+});
+ 
+/* Drawer open/close */
+const drawer = document.getElementById("cart-drawer");
+const overlay = document.getElementById("overlay");
+function openCart(){ drawer.classList.add("open"); overlay.classList.add("open"); }
+function closeCart(){ drawer.classList.remove("open"); overlay.classList.remove("open"); }
+document.getElementById("cart-btn").addEventListener("click", openCart);
+document.getElementById("cart-close").addEventListener("click", closeCart);
+overlay.addEventListener("click", closeCart);
+document.getElementById("clear-cart").addEventListener("click", clearCart);
+document.getElementById("hero-order").addEventListener("click", (e) => { e.preventDefault(); document.getElementById("menu").scrollIntoView({behavior:"smooth"}); });
+ 
+/* ============================================================
+   PLACE ORDER  writes the order to Supabase and listens
+   for live status updates on that order
+   ============================================================ */
+placeOrderBtn.addEventListener("click", async () => {
+    const entries = Object.entries(cart);
+    const name = document.getElementById("cust-name").value.trim();
+    const phone = document.getElementById("cust-phone").value.trim();
+    const address = document.getElementById("cust-address").value.trim();
+    const notes = document.getElementById("cust-notes").value.trim();
+ 
+    if (!entries.length) return toast("Your cart is empty");
+    if (!name || !phone || !address) return toast("Please fill delivery details");
+ 
+    const orderItems = entries.map(([id, qty]) => {
+        const item = menu.find(m => m.id === Number(id));
+        return { name: item.name, qty, price: item.price };
     });
-
-    emptyMsg.hidden = list.length > 0;
-    grid.innerHTML = list.map((o, i) => ticketMarkup(o, { tilt: (i % 2 === 0 ? 0.5 : -0.5) })).join('');
-  }
-
-  /* ---------------- INTERACTIVITY ---------------- */
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-action]');
-    if (!btn) return;
-    const id = btn.dataset.id;
-    const action = btn.dataset.action;
-    if (action === 'accept') setStatus(id, STATUS.PREPARING);
-    if (action === 'deliver') setStatus(id, STATUS.DELIVERED);
-    if (action === 'cancel') setStatus(id, STATUS.CANCELLED);
-  });
-
-  searchInput.addEventListener('input', (e) => {
-    state.query = e.target.value;
-    render();
-  });
-
-  filtersEl.addEventListener('click', (e) => {
-    const chip = e.target.closest('.filter-chip');
-    if (!chip) return;
-    filtersEl.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('is-active'));
-    chip.classList.add('is-active');
-    state.filter = chip.dataset.filter;
-    render();
-  });
-
-  setInterval(() => {
-    // Basic timer refresh without full re-render
-    document.querySelectorAll('.ticket__timer-text').forEach(el => {
-        const id = el.closest('.ticket').dataset.id;
-        const order = ORDERS.find(o => o.id == id);
-        if (order) {
-            const { m, s } = waitMinutesSeconds(order);
-            el.textContent = `Waiting ${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-        }
-    });
-  }, 1000);
-
-})();
+ 
+    placeOrderBtn.disabled = true;
+    placeOrderBtn.textContent = "Processing...";
+ 
+    const { data, error } = await dbClient
+        .from('orders')
+        .insert([{
+            customer: name,
+            phone: phone,
+            address: address,
+            notes: notes,
+            items: orderItems,
+            total: cartTotal(),
+            status: 'pending'
+        }])
+        .select();
+ 
+    if (error) {
+        toast("Error: " + error.message);
+        placeOrderBtn.disabled = false;
+        placeOrderBtn.innerHTML = placeOrderOriginalHTML;
+    } else {
+        const orderId = data[0].id;
+        document.getElementById("checkout-fields").style.display = "none";
+        document.getElementById("order-success").style.display = "block";
+        document.getElementById("new-id").textContent = "#" + orderId;
+        placeOrderBtn.style.display = "none";
+        document.getElementById("clear-cart").style.display = "none";
+ 
+        localStorage.removeItem("eattout_cart");
+        cart = {};
+        renderCart();
+        toast("Order #"+orderId+" placed!");
+ 
+        subscribeToOrderStatus(orderId);
+    }
+});
+ 
+function subscribeToOrderStatus(id) {
+    dbClient
+        .channel('order-tracking-' + id)
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${id}` }, payload => {
+            toast("Status updated: " + payload.new.status.toUpperCase());
+            document.getElementById("new-id").textContent = `#${id} (${payload.new.status.toUpperCase()})`;
+        })
+        .subscribe();
+}
+ 
+/* ============================================================
+   INIT
+   ============================================================ */
+document.getElementById("year").textContent = new Date().getFullYear();
+renderMenu();
+renderCart();
 </script>
 </body>
 </html>
